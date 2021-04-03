@@ -98,7 +98,7 @@ client.on ('message', async message => {
       user.save();
     })
     await user.save();
-  }
+  }//
 
   else if (command === "yes"){
     let order = user.openOrder
