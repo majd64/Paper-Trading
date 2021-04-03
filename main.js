@@ -15,9 +15,12 @@ mongoose.connect("mongodb+srv://admin:" + process.env.ATLASPASSWORD + "@cluster0
 const formatter = new Intl.NumberFormat('en-US', {style: 'currency',currency: "USD",minimumFractionDigits: 2});
 
 const prefix = ".";
+const color = "#fffff"
 
 client.on ('message', async message => {
   if (!message.content.startsWith(prefix)) return
+
+  console.log(message.content)
 
   var user = await models.User.findOne({'id': message.author.id}).exec();
   if (user == null){
@@ -45,11 +48,11 @@ client.on ('message', async message => {
     })
   }
 
-  else if (command === "balance"){
-    var itemsImbed = new Discord.MessageEmbed()
-    itemsImbed.addField(`USD Balance`, formatter.format(user.usdbalance));
-    message.channel.send(itemsImbed);
-  }
+  // else if (command === "balance"){
+  //   var itemsImbed = new Discord.MessageEmbed()
+  //   itemsImbed.addField(`USD Balance`, formatter.format(user.usdbalance));
+  //   message.channel.send(itemsImbed);
+  // }
 
   else if (command === "buy"){
     user.openOrder = undefined;
@@ -90,8 +93,8 @@ client.on ('message', async message => {
         message.channel.send("Invalid symbol.")
         return
       }
-      message.channel.send(`Are you sure you want to sell ${amount} ${symbol}. Price of ${symbol} is ${formatter.format(price)}. Total will be ${formatter.format(price * amount)}. (.yes or .no)`)
-      user.openOrder = {order: "marketsell", symbol: symbol, amount: amount, price: price}
+      message.channel.send(`Are you sure you want to market sell all your ${symbol}. Price of ${symbol} is ${formatter.format(price)}. (.yes or .no)`)
+      user.openOrder = {order: "marketsell", symbol: symbol, amount: -1, price: price}
       user.save();
     })
     await user.save();
@@ -99,7 +102,7 @@ client.on ('message', async message => {
 
   else if (command === "yes"){
     let order = user.openOrder
-    if (!order){
+    if (!user.openOrder.amount){
       message.channel.send("No open orders")
       return
     }
@@ -129,7 +132,10 @@ client.on ('message', async message => {
 
       coin = user.wallet[index]
 
-      console.log(coin.amount)
+      if (order.amount === -1){
+        order.amount = coin.amount
+      }
+
       if (order.amount > coin.amount){
         message.channel.send("Not enough funds")
         return
@@ -144,25 +150,39 @@ client.on ('message', async message => {
     message.channel.send("Success!")
   }
 
-  else if (command === ".no"){
-      user.openOrder = undefined
-      await user.save();
-
-      message.channel.send("order canclled")
+  else if (command === "no"){
+    user.openOrder = undefined
+    await user.save();
+    message.channel.send("order canclled")
   }
 
   else if (command === "wallet"){
     var itemsImbed = new Discord.MessageEmbed()
-    itemsImbed.addField("USD", formatter.format(user.usdbalance));
-    user.wallet.forEach((coin, j) => {
-      price(coin.symbol, price => {
-        itemsImbed.addField(`${coin.symbol.toUpperCase()}`, `Amount: ${coin.amount}\n value: ${formatter.format(coin.amount * price)}`);
-        console.log(itemsImbed)
-        if (itemsImbed.fields.length === user.wallet.length + 1){
-          message.channel.send(itemsImbed);
-        }
-      })
-    });
+
+    values(user.wallet, wallet => {
+      itemsImbed.addField("Total wallet value", formatter.format(wallet.total + user.usdbalance));
+      itemsImbed.addField("USD", formatter.format(user.usdbalance));
+      itemsImbed.setColor(color)
+
+
+      wallet.wallet.forEach((coin, j) => {
+        itemsImbed.addField(`${coin.symbol.toUpperCase()}`, `Amount: ${coin.amount}\n value: ${formatter.format(coin.amount * coin.price)}`);
+      });
+      message.channel.send(itemsImbed)
+    })
+  }
+
+  else if (command === "help"){
+    const fields = [{ name: '.price [symbol]', value: "Returns price of a coin", inline: false},
+    { name: '.wallet', value: "Shows wallet value, balance and all coins", inline: false},
+    { name: '.buy [symbol] [amount]', value: "Buys a coin", inline: false},
+    { name: '.sell [symbol] [amount]', value: "Sells a coin", inline: false}]
+    const helpEmbed = new Discord.MessageEmbed()
+    helpEmbed.setColor(color)
+    helpEmbed.fields = fields
+
+    message.channel.send(helpEmbed)
+
   }
 });
 
@@ -178,4 +198,23 @@ function price(symbol, callback){
     .catch(err => {
       callback(null)
     })
+}
+
+function values(wallet, callback){
+  const newWallet = JSON.parse(JSON.stringify(wallet));
+  var total = 0;
+  let counter = 0;
+  if (newWallet.length === 0){
+    return callback({wallet: [], total: total})
+  }
+  newWallet.forEach((coin, i) => {
+    price(coin.symbol, price => {
+      counter += 1
+      newWallet[i].price = price
+      total = total + (parseFloat(price) * coin.amount)
+      if (counter == newWallet.length){
+        return callback({wallet: newWallet, total: total})
+      }
+    })
+  });
 }
