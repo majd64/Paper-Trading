@@ -82,11 +82,6 @@ client.on ('message', async message => {
     else if (order.order === "marketsell"){
       const index = user.wallet.findIndex(x => x.symbol === order.symbol)
 
-      if (index === -1){
-        message.channel.send(`You have no ${order.symbol}`)
-        return
-      }
-
       coin = user.wallet[index]
 
       if (order.amount === -1){
@@ -161,9 +156,19 @@ async function createOrder(orderType, user, args, message){
       return message.channel.send("Invalid symbol")
     }
 
-    if (input.amount === -1){
+    if (orderType === "marketsell"){
       const index = await user.wallet.findIndex(x => x.symbol.toUpperCase() === input.symbol.toUpperCase())
-      input.amount = user.wallet[index].amount
+      if (index === -1){
+        return message.channel.send(`You have no ${order.symbol}`)
+      }
+    }
+
+    if (input.amount === -1){
+      if (orderType === "marketbuy"){
+        input.amount = user.usdbalance / price
+      }else{
+        input.amount = user.wallet[index].amount
+      }
     }
 
     user.openOrder = {order: orderType, symbol: input.symbol, amount: input.amount, price: price}
