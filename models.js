@@ -7,7 +7,8 @@ const userSchema = new mongoose.Schema({
     symbol: String,
     amount: Number
   }],
-  openOrder: {order: String, symbol: String, amount: Number, price: Number}
+  openOrder: {order: String, symbol: String, amount: Number, price: Number, date: Number},
+  orderHistory: [{order: String, symbol: String, amount: Number, price: Number, date: Number}]
 });
 
 const dataSchema = new mongoose.Schema({

@@ -29,7 +29,8 @@ client.on ('message', async message => {
       id: message.author.id,
       usdbalance: 10000,
       wallet: [],
-      openOrder: undefined
+      openOrder: undefined,
+      orderHistory: []
     });
     user = newUser;
   }
@@ -60,8 +61,13 @@ client.on ('message', async message => {
   else if (command === "yes"){
     let order = user.openOrder
     if (!user.openOrder.amount){
-      message.channel.send("No open orders")
-      return
+      return message.channel.send("No open orders")
+    }
+    console.log(order.date)
+    console.log(Math.round(Date.now() / 1000))
+    if (order.date < (Math.round(Date.now() / 1000) - 60)){
+      user.openorder = undefined
+      return message.channel.send("Order expired")
     }
 
     if (order.order === "marketbuy"){
@@ -101,6 +107,8 @@ client.on ('message', async message => {
       }
     }
 
+    user.orderHistory.push(user.openOrder)
+
     user.openOrder = undefined
     await user.save();
     message.channel.send("Success!")
@@ -128,6 +136,21 @@ client.on ('message', async message => {
     })
   }
 
+  else if (command === "history"){
+    var itemsImbed = new Discord.MessageEmbed()
+  	.setColor(color)
+    user.orderHistory.forEach((order, j) => {
+      var string = ""
+      itemsImbed.addField(`${order.order === "marketbuy" ? "Buy" : "Sell"} ${order.symbol}`, `Price: ${order.price}\nAmount: ${order.amount}\nTotal: ${order.price * order.amount}`);
+      if(itemsImbed.fields.length === 25){
+        message.channel.send(itemsImbed);
+        itemsImbed = new Discord.MessageEmbed()
+        .setColor(color);
+      }
+    });
+    message.channel.send(itemsImbed);
+  }
+
   else if (command === "help"){
     const fields = [{ name: '.price [symbol]', value: "Returns price of a coin", inline: false},
     { name: '.wallet', value: "Shows wallet value, balance and all coins", inline: false},
@@ -151,6 +174,8 @@ async function createOrder(orderType, user, args, message){
     return message.channel.send(`Invalid input. To buy use the command *${prefix}buy 100 ada*`)
   }
 
+  input.symbol = input.symbol.toUpperCase()
+
   price(input.symbol, async price => {
     if (!price){
       return message.channel.send("Invalid symbol")
@@ -173,7 +198,7 @@ async function createOrder(orderType, user, args, message){
       }
     }
 
-    user.openOrder = {order: orderType, symbol: input.symbol, amount: input.amount, price: price}
+    user.openOrder = {order: orderType, symbol: input.symbol, amount: input.amount, price: price, date: Math.round(Date.now() / 1000)}
     user.save();
     return message.channel.send(`Are you sure you want to ${orderType === "marketbuy" ? "buy" : "sell"} ${input.amount} ${input.symbol}. Price of ${input.symbol} is ${formatter.format(price)}. Total will be ${formatter.format(price * input.amount)}. (${prefix}yes or ${prefix}no)`)
   })
@@ -183,13 +208,34 @@ function price(symbol, callback){
   axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol.toUpperCase()}USDT`)
     .then(res => {
       if (!res.data.price){
-        callback(null)
-        return
+        console.log("nono1")
+        axios.get(`https://api.kucoin.com/api/v1/prices?currencies=${symbol.toUpperCase()}`)
+          .then(res => {
+            console.log("n word")
+            if (!res.data.data[symbol.toUpperCase()]){
+              return callback(null)
+            }
+            callback(res.data.data[symbol.toUpperCase()])
+          })
+          .catch(err => {
+            return callback(null)
+          })
       }
       callback(res.data.price)
     })
     .catch(err => {
-      callback(null)
+      console.log("nono2")
+      axios.get(`https://api.kucoin.com/api/v1/prices?currencies=${symbol.toUpperCase()}`)
+        .then(res => {
+          if (!res.data.data[symbol.toUpperCase()]){
+
+            return callback(null)
+          }
+          callback(res.data.data[symbol.toUpperCase()])
+        })
+        .catch(err => {
+          return callback(null)
+        })
     })
 }
 
