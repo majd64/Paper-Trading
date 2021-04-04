@@ -3,6 +3,7 @@ const axios = require('axios');
 require('custom-env').env('staging');
 let models = require("./models");
 const mongoose = require("mongoose");
+const util = require("./util");
 
 const client = new Discord.Client();
 client.login(process.env.LOGIN);
@@ -15,7 +16,7 @@ mongoose.connect("mongodb+srv://admin:" + process.env.ATLASPASSWORD + "@cluster0
 const formatter = new Intl.NumberFormat('en-US', {style: 'currency',currency: "USD",minimumFractionDigits: 2});
 
 const prefix = ".";
-const color = "#fffff"
+const color = "#e74c3c"
 
 client.on ('message', async message => {
   if (!message.content.startsWith(prefix)) return
@@ -48,57 +49,13 @@ client.on ('message', async message => {
     })
   }
 
-  // else if (command === "balance"){
-  //   var itemsImbed = new Discord.MessageEmbed()
-  //   itemsImbed.addField(`USD Balance`, formatter.format(user.usdbalance));
-  //   message.channel.send(itemsImbed);
-  // }
-
   else if (command === "buy"){
-    user.openOrder = undefined;
-
-    if (args.length != 2){
-      message.channel.send("Invalid command")
-      return
-    }
-
-    const symbol = args[0].toUpperCase()
-    const amount = args[1]
-
-    price(symbol, price => {
-      if (!price){
-        message.channel.send("Invalid symbol.")
-        return
-      }
-      message.channel.send(`Are you sure you want to purchase ${amount} ${symbol}. Price of ${symbol} is ${formatter.format(price)}. Total will be ${formatter.format(price * amount)}. (.yes or .no)`)
-      user.openOrder = {order: "marketbuy", symbol: symbol, amount: amount, price: price}
-      user.save();
-    })
-    await user.save();
+    res = await createOrder("marketbuy", user, args, message)
   }
 
   else if (command === "sell"){
-    user.openOrder = undefined;
-
-    if (args.length != 2){
-      message.channel.send("Invalid command")
-      return
-    }
-
-    const symbol = args[0].toUpperCase()
-    const amount = args[1]
-
-    price(symbol, price => {
-      if (!price){
-        message.channel.send("Invalid symbol.")
-        return
-      }
-      message.channel.send(`Are you sure you want to market sell all your ${symbol}. Price of ${symbol} is ${formatter.format(price)}. (.yes or .no)`)
-      user.openOrder = {order: "marketsell", symbol: symbol, amount: -1, price: price}
-      user.save();
-    })
-    await user.save();
-  }//
+    res = await createOrder("marketsell", user, args, message)
+  }
 
   else if (command === "yes"){
     let order = user.openOrder
@@ -126,7 +83,7 @@ client.on ('message', async message => {
       const index = user.wallet.findIndex(x => x.symbol === order.symbol)
 
       if (index === -1){
-        message.channel.send(`You have no ${order.symbol.toUpperCase()}`)
+        message.channel.send(`You have no ${order.symbol}`)
         return
       }
 
@@ -143,6 +100,10 @@ client.on ('message', async message => {
       user.usdbalance = user.usdbalance + (order.amount * order.price)
 
       user.wallet[index].amount = user.wallet[index].amount - order.amount
+
+      if (user.wallet[index].amount === 0){
+        user.wallet.splice(index, 1);
+      }
     }
 
     user.openOrder = undefined
@@ -166,7 +127,7 @@ client.on ('message', async message => {
 
 
       wallet.wallet.forEach((coin, j) => {
-        itemsImbed.addField(`${coin.symbol.toUpperCase()}`, `Amount: ${coin.amount}\n value: ${formatter.format(coin.amount * coin.price)}`);
+        itemsImbed.addField(`${coin.symbol}`, `Amount: ${coin.amount}\n value: ${formatter.format(coin.amount * coin.price)}`);
       });
       message.channel.send(itemsImbed)
     })
@@ -185,6 +146,31 @@ client.on ('message', async message => {
 
   }
 });
+
+async function createOrder(orderType, user, args, message){
+  user.openOrder = undefined;
+
+  const input = util.parseInput(args)
+
+  if (!input){
+    return message.channel.send(`Invalid input. To buy use the command *${prefix}buy 100 ada*`)
+  }
+
+  price(input.symbol, async price => {
+    if (!price){
+      return message.channel.send("Invalid symbol")
+    }
+
+    if (input.amount === -1){
+      const index = await user.wallet.findIndex(x => x.symbol.toUpperCase() === input.symbol.toUpperCase())
+      input.amount = user.wallet[index].amount
+    }
+
+    user.openOrder = {order: orderType, symbol: input.symbol, amount: input.amount, price: price}
+    user.save();
+    return message.channel.send(`Are you sure you want to ${orderType === "marketbuy" ? "buy" : "sell"} ${input.amount} ${input.symbol}. Price of ${input.symbol} is ${formatter.format(price)}. Total will be ${formatter.format(price * input.amount)}. (${prefix}yes or ${prefix}no)`)
+  })
+}
 
 function price(symbol, callback){
   axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol.toUpperCase()}USDT`)
