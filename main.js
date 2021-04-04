@@ -156,8 +156,10 @@ async function createOrder(orderType, user, args, message){
       return message.channel.send("Invalid symbol")
     }
 
+    let index;
+
     if (orderType === "marketsell"){
-      const index = await user.wallet.findIndex(x => x.symbol.toUpperCase() === input.symbol.toUpperCase())
+      index = await user.wallet.findIndex(x => x.symbol.toUpperCase() === input.symbol.toUpperCase())
       if (index === -1){
         return message.channel.send(`You have no ${order.symbol}`)
       }
