@@ -17,7 +17,7 @@ mongoose.connect("mongodb+srv://admin:" + process.env.ATLASPASSWORD + "@cluster0
 const formatter = new Intl.NumberFormat('en-US', {style: 'currency',currency: "USD",minimumFractionDigits: 5});
 
 const prefix = ".";
-const color = "#ec4c3c"
+const color = "#ec43c3"
 
 client.on ('message', async message => {
   if (!message.content.startsWith(prefix)) return
@@ -42,8 +42,9 @@ client.on ('message', async message => {
   const command = args.shift().toLowerCase();
 
   if (command === "price"){
+    msg = await message.channel.send('Loading...');
     let p = await price(args[0]);
-    message.channel.send(p ? formatter.format(p) : "Invalid symbol")
+    msg.edit(p ? formatter.format(p) : "Invalid symbol")
   }
 
   else if (command === "buy"){
@@ -124,6 +125,7 @@ client.on ('message', async message => {
     let leaderboard = [];
     var lowestBal;
     var lowestBalIndex = -1;
+    msg = await message.channel.send('Loading...');
     await models.User.find({}, async (err, users) => {
       users.forEach(async (user, i) => {
         if (leaderboard.length < 10){
@@ -140,19 +142,19 @@ client.on ('message', async message => {
           for (let i = 0; i < 10; i++){
             itemsImbed.addField(`${i + 1}) ${leaderboard[i].username ? leaderboard[i].username : "Username not stored yet"}`, `${formatter.format(leaderboard[i].total)}`);
           }
-          message.channel.send(itemsImbed)
+          msg.edit(itemsImbed)
         }
       });
     })
   }
 
   else if (command === "help"){
-    const fields = [{ name: '!price [symbol]', value: "Returns price of a coin", inline: false},
-    { name: '.wallet', value: "Shows wallet value, balance and all coins", inline: false},
-    { name: '.buy [symbol] [amount]', value: "Buys a coin (use 'max' to buy using your entire balance)", inline: false},
-    { name: '.sell [symbol] [amount]', value: "Sells a coin  (use 'max' to sell your entire balance)", inline: false},
-    { name: '.history', value: "Shows trade history", inline: false},
-    { name: '.leaderboard', value: "Shows top 10 richest users", inline: false}]
+    const fields = [{ name: `${prefix}price [symbol]`, value: `Returns price of a coin`, inline: false},
+    { name: `${prefix}wallet`, value: `Shows wallet value, balance and all coins`, inline: false},
+    { name: `${prefix}buy [symbol] [amount]`, value: `Buys a coin (use 'max' to buy using your entire balance)`, inline: false},
+    { name: `${prefix}sell [symbol] [amount]`, value: `Sells a coin  (use 'max' to sell your entire balance)`, inline: false},
+    { name: `${prefix}history`, value: `Shows trade history`, inline: false},
+    { name: `${prefix}leaderboard`, value: `Shows top 10 richest users`, inline: false}]
 
     const helpEmbed = new Discord.MessageEmbed()
     .setColor(color)
@@ -205,26 +207,23 @@ const price = async symbol => {
 
 const coingeckoPrice = async ticker => {
   return new Promise(async (resolve, reject) => {
-    const id = await getId(ticker)
-    axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`)
-      .then(res => {
-        if (res.data[id] && res.data[id].usd){
-          resolve(res.data[id].usd)
-        }
-      })
-      .catch(err => {
-        resolve(null)
-      })
+    for (let i = 0; i < 8; i++){
+      const res = await getCoinGeckoCoins(i)
+      if (res){
+        res.forEach((coin, i) => {
+          if (coin.symbol === ticker.toLowerCase()) return resolve(coin.current_price)
+        });
+      }
+    }
+    resolve(null)
   })
 }
 
-const getId = ticker => {
+const getCoinGeckoCoins = pageNum => {
   return new Promise((resolve, reject) => {
-    axios.get(`https://api.coingecko.com/api/v3/coins/list`)
+    axios.get(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${pageNum}&sparkline=false`)
       .then(res => {
-        res.data.forEach((obj, i) => {
-          if (obj.symbol === ticker.toLowerCase()) return resolve(obj.id)
-        });
+        resolve(res.data)
       })
       .catch(err => {
         resolve(null)
