@@ -42,9 +42,10 @@ client.on ('message', async message => {
   const command = args.shift().toLowerCase();
 
   if (command === "price"){
-    msg = await message.channel.send('Loading...');
+    message.channel.startTyping();
     let p = await price(args[0]);
-    msg.edit(p ? formatter.format(p) : "Invalid symbol")
+    message.channel.stopTyping();
+    message.channel.send(p ? formatter.format(p) : "Invalid symbol")
   }
 
   else if (command === "buy"){
@@ -94,6 +95,7 @@ client.on ('message', async message => {
   }
 
   else if (command === "wallet"){
+    message.channel.startTyping();
     var itemsImbed = new Discord.MessageEmbed()
 
     let wallet = await values(user.wallet)
@@ -105,6 +107,7 @@ client.on ('message', async message => {
     wallet.wallet.forEach((coin, j) => {
       itemsImbed.addField(`${coin.symbol}`, `Amount: ${coin.amount}\n value: ${formatter.format(coin.amount * coin.price)}`);
     });
+    message.channel.stopTyping();
     message.channel.send(itemsImbed)
   }
 
@@ -125,7 +128,7 @@ client.on ('message', async message => {
     let leaderboard = [];
     var lowestBal;
     var lowestBalIndex = -1;
-    msg = await message.channel.send('Loading...');
+    message.channel.startTyping();
     await models.User.find({}, async (err, users) => {
       users.forEach(async (user, i) => {
         if (leaderboard.length < 10){
@@ -142,7 +145,8 @@ client.on ('message', async message => {
           for (let i = 0; i < 10; i++){
             itemsImbed.addField(`${i + 1}) ${leaderboard[i].username ? leaderboard[i].username : "Username not stored yet"}`, `${formatter.format(leaderboard[i].total)}`);
           }
-          msg.edit(itemsImbed)
+          message.channel.stopTyping();
+          message.channel.send(itemsImbed)
         }
       });
     })
